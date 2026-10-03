@@ -70,7 +70,7 @@ unset(_lua_append_versions)
 
 # this is a function only to have all the variables inside go away automatically
 function(_lua_set_version_vars)
-    set(LUA_VERSIONS5 5.3 5.2)
+    set(LUA_VERSIONS5 5.5 5.4 5.3 5.2)
 
     if (Lua_FIND_VERSION_EXACT)
         if (Lua_FIND_VERSION_COUNT GREATER 1)
@@ -136,6 +136,19 @@ function(_lua_check_header_version _hdr_file)
         string(REGEX REPLACE "^([0-9]+)\\.[0-9.]*$" "\\1" LUA_VERSION_MAJOR "${LUA_VERSION_STRING}")
         string(REGEX REPLACE "^[0-9]+\\.([0-9]+)[0-9.]*$" "\\1" LUA_VERSION_MINOR "${LUA_VERSION_STRING}")
         string(REGEX REPLACE "^[0-9]+\\.[0-9]+\\.([0-9]).*" "\\1" LUA_VERSION_PATCH "${LUA_VERSION_STRING}")
+    endif ()
+    if (NOT LUA_VERSION_STRING MATCHES "^[0-9.]+$")
+        # Lua >= 5.5 defines LUA_VERSION_MAJOR as LUAI_TOSTR(LUA_VERSION_MAJOR_N)
+        # instead of a literal string, which the regexes above cannot parse.
+        # (A failed REGEX REPLACE leaves the input string unchanged, so
+        # LUA_VERSION_STRING may be garbage rather than empty here.)
+        # Fall back to the numeric _N macros.
+        file(STRINGS "${_hdr_file}" lua_version_n_strings
+             REGEX "^#define[ \t]+LUA_VERSION_(MAJOR|MINOR|RELEASE)_N[ \t]+[0-9]+.*")
+        string(REGEX REPLACE ".*;#define[ \t]+LUA_VERSION_MAJOR_N[ \t]+([0-9]+)[ \t]*;.*" "\\1" LUA_VERSION_MAJOR ";${lua_version_n_strings};")
+        string(REGEX REPLACE ".*;#define[ \t]+LUA_VERSION_MINOR_N[ \t]+([0-9]+)[ \t]*;.*" "\\1" LUA_VERSION_MINOR ";${lua_version_n_strings};")
+        string(REGEX REPLACE ".*;#define[ \t]+LUA_VERSION_RELEASE_N[ \t]+([0-9]+)[ \t]*;.*" "\\1" LUA_VERSION_PATCH ";${lua_version_n_strings};")
+        set(LUA_VERSION_STRING "${LUA_VERSION_MAJOR}.${LUA_VERSION_MINOR}.${LUA_VERSION_PATCH}")
     endif ()
     foreach (ver IN LISTS _lua_append_versions)
         if (ver STREQUAL "${LUA_VERSION_MAJOR}.${LUA_VERSION_MINOR}")

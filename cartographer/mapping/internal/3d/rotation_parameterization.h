@@ -26,7 +26,7 @@ namespace mapping {
 
 struct YawOnlyQuaternionPlus {
   template <typename T>
-  bool operator()(const T* x, const T* delta, T* x_plus_delta) const {
+  bool Plus(const T* x, const T* delta, T* x_plus_delta) const {
     const T clamped_delta = common::Clamp(delta[0], T(-0.5), T(0.5));
     T q_delta[4];
     q_delta[0] = ceres::sqrt(1. - clamped_delta * clamped_delta);
@@ -36,11 +36,23 @@ struct YawOnlyQuaternionPlus {
     ceres::QuaternionProduct(q_delta, x, x_plus_delta);
     return true;
   }
+
+  // Required by ceres::AutoDiffManifold (Ceres >= 2.2): the inverse of Plus.
+  // Since x_plus_delta = q_delta * x with q_delta a pure yaw rotation, the
+  // delta can be recovered exactly from y * x^-1.
+  template <typename T>
+  bool Minus(const T* y, const T* x, T* y_minus_x) const {
+    const T x_inverse[4] = {x[0], -x[1], -x[2], -x[3]};
+    T q_delta[4];
+    ceres::QuaternionProduct(y, x_inverse, q_delta);
+    y_minus_x[0] = T(2.0) * ceres::atan2(q_delta[3], q_delta[0]);
+    return true;
+  }
 };
 
 struct ConstantYawQuaternionPlus {
   template <typename T>
-  bool operator()(const T* x, const T* delta, T* x_plus_delta) const {
+  bool Plus(const T* x, const T* delta, T* x_plus_delta) const {
     const T delta_norm =
         ceres::sqrt(common::Pow2(delta[0]) + common::Pow2(delta[1]));
     const T sin_delta_over_delta =
@@ -57,6 +69,24 @@ struct ConstantYawQuaternionPlus {
     // that have nothing to do with gravity alignment (i.e. we disallow steps
     // just changing "yaw" of the complete map).
     ceres::QuaternionProduct(x, q_delta, x_plus_delta);
+    return true;
+  }
+
+  // Required by ceres::AutoDiffManifold (Ceres >= 2.2): the inverse of Plus.
+  // Since x_plus_delta = x * q_delta, the delta is recovered from x^-1 * y.
+  template <typename T>
+  bool Minus(const T* y, const T* x, T* y_minus_x) const {
+    const T x_inverse[4] = {x[0], -x[1], -x[2], -x[3]};
+    T q_delta[4];
+    ceres::QuaternionProduct(x_inverse, y, q_delta);
+    const T norm_v =
+        ceres::sqrt(common::Pow2(q_delta[1]) + common::Pow2(q_delta[2]));
+    const T theta = T(2.0) * ceres::atan2(norm_v, q_delta[0]);
+    // scale = theta / sin(theta / 2); limit is 2 as theta -> 0.
+    const T scale =
+        norm_v < T(1e-10) ? T(2.0) : theta / ceres::sin(theta / T(2.0));
+    y_minus_x[0] = q_delta[1] * scale;
+    y_minus_x[1] = q_delta[2] * scale;
     return true;
   }
 };

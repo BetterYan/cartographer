@@ -1,0 +1,46 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "win64-release",
+      "displayName": "x64 Release (vcpkg)",
+      "description": "使用 vcpkg 依赖 + MSVC + Ninja 构建 Cartographer",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/x64-release-vcpkg",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_TOOLCHAIN_FILE": "D:/dev/vcpkg/scripts/buildsystems/vcpkg.cmake",
+        "BUILD_GRPC": "OFF",
+        "BUILD_PROMETHEUS": "OFF"
+      }
+    },
+    {
+      "name": "win64-release-short",
+      "displayName": "x64 Release (short path)",
+      "description": "短构建目录，解决长路径测试目标超过 MSVC 250 字符限制的问题",
+      "inherits": "win64-release",
+      "binaryDir": "D:/b/cart"
+    },
+    {
+      "name": "win64-debug",
+      "displayName": "x64 Debug (vcpkg)",
+      "description": "调试用，SLAM 运行性能极差，仅用于单步调试",
+      "inherits": "win64-release",
+      "binaryDir": "${sourceDir}/out/build/x64-debug-vcpkg",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "win64-release",
+      "configurePreset": "win64-release"
+    },
+    {
+      "name": "win64-debug",
+      "configurePreset": "win64-debug"
+    }
+  ]
+}

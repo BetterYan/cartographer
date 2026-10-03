@@ -13,7 +13,17 @@
 # limitations under the License.
 
 find_package(Eigen3 QUIET NO_MODULE)
-if (NOT EIGEN3_FOUND)
+if (TARGET Eigen3::Eigen)
+  # Config file found (e.g. provided by vcpkg). It only defines the
+  # Eigen3::Eigen target; propagate the old-style variables that
+  # Cartographer's CMakeLists.txt expects.
+  set(EIGEN3_FOUND TRUE)
+  set(Eigen3_FOUND TRUE)
+  if (NOT EIGEN3_INCLUDE_DIR)
+    get_target_property(EIGEN3_INCLUDE_DIR Eigen3::Eigen INTERFACE_INCLUDE_DIRECTORIES)
+  endif()
+  set(EIGEN3_LIBRARIES Eigen3::Eigen)
+else()
   list(APPEND EIGEN3_POSSIBLE_DIRS
     /usr/local/include/eigen3
     /usr/include/eigen3
@@ -24,6 +34,7 @@ if (NOT EIGEN3_FOUND)
   )
   if (EIGEN3_INCLUDE_DIR AND EXISTS ${EIGEN3_INCLUDE_DIR})
     set(EIGEN3_FOUND TRUE)
+    set(Eigen3_FOUND TRUE)
   else()
     message(WARNING "Failed to find Eigen3. Please, define the path manually.")
   endif()

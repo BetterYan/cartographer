@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-cmake_minimum_required(VERSION 3.2)
+cmake_minimum_required(VERSION 3.5...3.31)
 
 project(cartographer)
 
@@ -29,10 +29,23 @@ include("${PROJECT_SOURCE_DIR}/cmake/functions.cmake")
 google_initialize_cartographer_project()
 google_enable_testing()
 
+if(MSVC)
+  # Force-include the thread-annotation compat shim in every translation unit
+  # (including generated protobuf sources), and build with UTF-8 to avoid
+  # code-page related parsing problems. Must be set before any targets are
+  # created.
+  add_compile_options(
+    "/FI${PROJECT_SOURCE_DIR}/cartographer/common/thread_annotation_compat.h"
+    "/FI${PROJECT_SOURCE_DIR}/cartographer/common/ceres_compat.h"
+    "/utf-8")
+endif()
+
 find_package(absl REQUIRED)
 set(BOOST_COMPONENTS iostreams)
 if(WIN32)
-  list(APPEND BOOST_COMPONENTS zlib)
+  # zlib support is compiled into boost_iostreams (vcpkg default feature).
+  # Requesting a separate 'zlib' component fails with Boost >= 1.89 modular
+  # CMake configs (looks for a nonexistent 'boost_zlib' package).
   set(Boost_USE_STATIC_LIBS FALSE)
 endif()
 find_package(Boost REQUIRED COMPONENTS ${BOOST_COMPONENTS})
@@ -41,10 +54,28 @@ find_package(Eigen3 REQUIRED)
 find_package(LuaGoogle REQUIRED)
 if(WIN32)
   # On Windows, Protobuf is incorrectly found by the bundled CMake module, so prefer native CMake config.
-  set(protobuf_MODULE_COMPATIBLE TRUE CACHE INTERNAL "")
-  find_package(Protobuf 3.0.0 CONFIG)
+  # Do not pin the version: vcpkg's protobuf 6.x config file rejects requests
+  # whose major version differs from 6.
+  find_package(Protobuf CONFIG REQUIRED)
 else()
   find_package(Protobuf 3.0.0 REQUIRED)
+endif()
+
+# Protobuf >= 4 (e.g. vcpkg's 6.x) config files no longer export the legacy
+# module-compatible variables. Derive them from the imported targets instead.
+if(NOT PROTOBUF_PROTOC_EXECUTABLE AND TARGET protobuf::protoc)
+  set(PROTOBUF_PROTOC_EXECUTABLE $<TARGET_FILE:protobuf::protoc>)
+endif()
+# Prefer the imported target over the module-compat variable: the latter can
+# point at the DLL itself in DLL (non-static) builds, which the linker
+# rejects (LNK1107).
+if(TARGET protobuf::libprotobuf)
+  set(PROTOBUF_LIBRARY protobuf::libprotobuf)
+elseif(NOT PROTOBUF_LIBRARY)
+  message(FATAL_ERROR "protobuf::libprotobuf target not found")
+endif()
+if(NOT PROTOBUF_INCLUDE_DIR AND TARGET protobuf::libprotobuf)
+  get_target_property(PROTOBUF_INCLUDE_DIR protobuf::libprotobuf INTERFACE_INCLUDE_DIRECTORIES)
 endif()
 
 if (${BUILD_GRPC})
